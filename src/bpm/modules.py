@@ -42,6 +42,9 @@ class LLMForSequenceClassification(TridentModule):
         if not hasattr(self, "_clf_head"):
             self.model = cast(MixtralForCausalLM, self.model)
             self.model.lm_head = torch.nn.Identity()
+            # nn.Embedding
+            # weight attribute is torch.Tensor of V by D,
+            # where V is num tokens and D is hidden dimensionality
             embeddings = self.model.get_output_embeddings()
             if isinstance(self.label_tokens, list):
                 ids = get_labelled_tokens(self.tokenizer, self.label_tokens)
