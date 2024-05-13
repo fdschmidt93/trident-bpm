@@ -1,0 +1,11 @@
+_target_: lightning.pytorch.Trainer
+
+# set `1` to train on GPU, `0` to train on CPU only
+accelerator: "gpu"
+devices: 1
+plugins:
+  _target_: lightning.pytorch.plugins.BitsandbytesPrecision
+  mode: nf4-dq
+
+min_epochs: 1
+max_epochs: 10

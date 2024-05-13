@@ -1,0 +1,73 @@
+# @package _global_
+
+defaults:
+  - default
+  - /dataspec@datamodule.train.activity: bpm_activity_clf
+  - /dataspec@datamodule.val.activity: bpm_activity_clf
+  - /dataspec@datamodule.test.activity: bpm_activity_clf
+  - override /callbacks: null
+
+run:
+  task: activity
+  lang: en
+  train_batch_size: 16
+  val_test_batch_size: 16
+  pretrained_model_name_or_path: "roberta-large"
+  # pretrained_model_name_or_path: "openai-community/gpt2"
+  tokenizer: 
+    _target_: transformers.AutoTokenizer.from_pretrained
+    pretrained_model_name_or_path: ${run.pretrained_model_name_or_path}
+
+trainer:
+  max_epochs: 10
+  accumulate_grad_batches: 1
+  num_sanity_val_steps: 0
+  precision: bf16
+  check_val_every_n_epoch: 1
+
+datamodule:
+  train:
+    activity:
+      dataset:
+        split: train
+      dataloader:
+        shuffle: true
+        batch_size: ${run.train_batch_size}
+  val:
+    activity:
+      dataset:
+        split: val
+      dataloader:
+        batch_size: ${run.val_test_batch_size}
+  test:
+    activity:
+      dataset:
+        split: test
+      dataloader:
+        batch_size: ${run.val_test_batch_size}
+
+module:
+  model:
+    _target_: transformers.AutoModelForSequenceClassification.from_pretrained
+    num_labels: 22
+    pretrained_model_name_or_path: roberta-base
+  optimizer:
+    # _target_: bitsandbytes.optim.AdamW8bit
+    _target_: torch.optim.AdamW
+    lr: 1e-5
+  scheduler:
+    num_warmup_steps: 0
+
+logger:
+  wandb:
+    name: "lang=${run.lang}_model=${run.pretrained_model_name_or_path}_epochs=${trainer.max_epochs}_bs=${_log_vars.train_batch_size}_lr=${module.optimizer.lr}_scheduler=${module.scheduler.num_warmup_steps}_seed=${run.seed}"
+    tags:
+      - "${run.pretrained_model_name_or_path}"
+      - "bs=${_log_vars.train_batch_size}"
+      - "lr=${module.optimizer.lr}"
+      - "scheduler=${module.scheduler.num_warmup_steps}"
+    project: ${run.task}
+
+callbacks:
+  learning_rate:
+    _target_: lightning.pytorch.callbacks.LearningRateMonitor

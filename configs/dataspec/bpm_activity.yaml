@@ -1,0 +1,73 @@
+dataset:
+  _target_: src.bpm.processing.load_prefixes
+  split: ???
+
+preprocessing:
+  method:
+    map:
+      batched: true
+      function:
+        _partial_: true
+        _target_: src.bpm.processing.preprocess_next_activity
+        tokenizer: ${run.tokenizer}
+    set_format:
+      columns:
+        - "input_ids"
+        - "attention_mask"
+        - "labels"
+
+dataloader:
+  _target_: torch.utils.data.dataloader.DataLoader
+  batch_size: 32
+  num_workers: 0
+  pin_memory: true
+  shuffle: false
+  collate_fn:
+    _target_: src.bpm.processing.DataCollatorForSequenceClassification
+    tokenizer: ${run.tokenizer}
+
+evaluation:
+  prepare:
+    batch: null
+    outputs:
+      _partial_: true
+      _target_: src.tasks.text_classification.evaluation.get_preds
+    step_outputs: null 
+
+  step_outputs:
+    outputs: preds
+    batch: labels
+
+  metrics:
+    acc:
+      metric:
+        _partial_: true
+        _target_: torchmetrics.functional.accuracy
+        task: "multiclass"
+        num_classes: 17
+      compute_on: "epoch_end"
+      kwargs: 
+        preds: "outputs.preds"
+        target: "outputs.labels"
+    micro_f1:
+      metric:
+        _partial_: true
+        _target_: torchmetrics.functional.f1_score
+        task: "multiclass"
+        average: "micro"
+        num_classes: 17
+      compute_on: "epoch_end"
+      kwargs: 
+        preds: "outputs.preds"
+        target: "outputs.labels"
+    macro_f1:
+      metric:
+        _partial_: true
+        _target_: torchmetrics.functional.f1_score
+        task: "multiclass"
+        average: "macro"
+        num_classes: 17
+      compute_on: "epoch_end"
+      kwargs: 
+        preds: "outputs.preds"
+        target: "outputs.labels"
