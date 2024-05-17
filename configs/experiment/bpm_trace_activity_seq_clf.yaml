@@ -13,6 +13,7 @@ defaults:
 run:
   task: trace_activity_clf
   lang: en
+  seed: 42
   train_batch_size: 16
   val_test_batch_size: 64
   pretrained_model_name_or_path: "roberta-large"
@@ -22,7 +23,7 @@ run:
 
 trainer:
   max_epochs: 10
-  accumulate_grad_batches: 16
+  accumulate_grad_batches: 2
   num_sanity_val_steps: 0
   precision: bf16
   check_val_every_n_epoch: 1

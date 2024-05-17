@@ -8,7 +8,7 @@ from transformers.models.roberta.modeling_roberta import RobertaClassificationHe
 from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
 from trident.core.module import TridentModule
 from transformers.models.mixtral import MixtralForCausalLM
-from omegaconf.dictconfig import DictConfig
+from omegaconf import DictConfig, ListConfig
 from hydra.utils import instantiate
 
 
@@ -46,13 +46,14 @@ class LLMForSequenceClassification(TridentModule):
             # weight attribute is torch.Tensor of V by D,
             # where V is num tokens and D is hidden dimensionality
             embeddings = self.model.get_output_embeddings()
-            if isinstance(self.label_tokens, list):
+            if isinstance(self.label_tokens, (list, ListConfig)):
                 ids = get_labelled_tokens(self.tokenizer, self.label_tokens)
                 # index token ids of output embedding matrix
                 # to fetch token embeddings in order of labelled tokens
                 # resulting self.clf_head: D by len(label_tokens) dimensional torch.Tensor
                 self._clf_head = nn.Parameter(embeddings.weight[ids].clone().T)
                 self._clf_head.requires_grad = False
+                self.clf_heads = None
             else:
                 modules = []
                 for values in self.label_tokens.values():
@@ -64,7 +65,7 @@ class LLMForSequenceClassification(TridentModule):
                 self.dataset2idx = {
                     k: i for i, k in enumerate(self.label_tokens.keys())
                 }
-        self._clf_head = self.clf_heads[0]
+                self._clf_head = self.clf_heads[0]
 
     def forward(self, batch: dict) -> dict[str, None | torch.Tensor]:
         self.model = cast(MixtralForCausalLM, self.model)
@@ -91,8 +92,11 @@ class LLMForSequenceClassification(TridentModule):
         self, batch: dict, batch_idx: int
     ) -> dict[str, None | torch.Tensor]:
         if "input_ids" in batch:
-            return self(batch)
+            output = self(batch)
+            self.log("train/loss", output["loss"])
+            return output
         else:
+            assert self.clf_heads is not None
             losses = []
             for k, v in batch.items():
                 self._clf_head = self.clf_heads[self.dataset2idx[k]]
@@ -105,10 +109,12 @@ class LLMForSequenceClassification(TridentModule):
             return {"loss": loss}
 
     def on_validation_batch_start(self, batch, batch_idx, dataloader_idx=0):
-        self._clf_head = self.clf_heads[dataloader_idx]
+        if self.clf_heads is not None:
+            self._clf_head = self.clf_heads[dataloader_idx]
 
     def on_test_batch_start(self, batch, batch_idx, dataloader_idx=0):
-        self._clf_head = self.clf_heads[dataloader_idx]
+        if self.clf_heads is not None:
+            self._clf_head = self.clf_heads[dataloader_idx]
 
 
 class RobertaForMultipleSequenceClassification(TridentModule):

@@ -12,6 +12,7 @@ run:
   lang: en
   train_batch_size: 32
   val_test_batch_size: 64
+  seed: 42
   pretrained_model_name_or_path: "roberta-large"
   tokenizer: 
     _target_: transformers.AutoTokenizer.from_pretrained
@@ -19,7 +20,7 @@ run:
 
 trainer:
   max_epochs: 10
-  accumulate_grad_batches: 16
+  accumulate_grad_batches: 1
   num_sanity_val_steps: 0
   precision: bf16
   check_val_every_n_epoch: 1
@@ -49,7 +50,7 @@ module:
   model:
     _target_: transformers.AutoModelForSequenceClassification.from_pretrained
     num_labels: 2
-    pretrained_model_name_or_path: roberta-base
+    pretrained_model_name_or_path: ${run.pretrained_model_name_or_path}
   optimizer:
     # _target_: bitsandbytes.optim.AdamW8bit
     _target_: torch.optim.AdamW
@@ -59,7 +60,7 @@ module:
 
 logger:
   wandb:
-    name: "lang=${run.lang}_jodel=${run.pretrained_model_name_or_path}_epochs=${trainer.max_epochs}_bs=${_log_vars.train_batch_size}_lr=${module.optimizer.lr}_scheduler=${module.scheduler.num_warmup_steps}_seed=${run.seed}"
+    name: "lang=${run.lang}_model=${run.pretrained_model_name_or_path}_epochs=${trainer.max_epochs}_bs=${_log_vars.train_batch_size}_lr=${module.optimizer.lr}_scheduler=${module.scheduler.num_warmup_steps}_seed=${run.seed}"
     tags:
       - "${run.pretrained_model_name_or_path}"
       - "bs=${_log_vars.train_batch_size}"

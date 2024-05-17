@@ -50,7 +50,7 @@ module:
   model:
     _target_: transformers.AutoModelForSequenceClassification.from_pretrained
     num_labels: 22
-    pretrained_model_name_or_path: roberta-base
+    pretrained_model_name_or_path: ${run.pretrained_model_name_or_path}
   optimizer:
     # _target_: bitsandbytes.optim.AdamW8bit
     _target_: torch.optim.AdamW

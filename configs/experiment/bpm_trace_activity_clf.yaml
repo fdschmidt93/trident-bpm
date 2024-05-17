@@ -23,7 +23,7 @@ run:
     padding_side: left
 
 trainer:
-  max_epochs: 10
+  max_epochs: 3
   accumulate_grad_batches: 16
   num_sanity_val_steps: 0
   precision: bf16
@@ -120,7 +120,7 @@ module:
   #     bnb_4bit_quant_type: "nf4"
   #     bnb_4bit_use_double_quant: True
   #     bnb_4bit_compute_dtype:
-  #       _target_: src.copa.utils.get_torch_dtype
+  #       _target_: src.bpm.utils.get_torch_dtype
   #       type_: bfloat16
   model:
     _target_: peft.get_peft_model
@@ -134,7 +134,7 @@ module:
         bnb_4bit_quant_type: "nf4"
         bnb_4bit_use_double_quant: True
         bnb_4bit_compute_dtype:
-          _target_: src.copa.utils.get_torch_dtype
+          _target_: src.bpm.utils.get_torch_dtype
           type_: bfloat16
     peft_config:
       _target_: peft.LoraConfig

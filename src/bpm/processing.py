@@ -53,6 +53,8 @@ def split_by_model(
     # train_ids, val_ids = train_test_split(
     #     train_val_ids, test_size=split_sizes[-2], random_state=random_state
     # )
+    df["num_unique_activities"] = df["unique_activities"].apply(len)
+    df = df[df["num_unique_activities"] > 1]
     with open(
         "/work/ws/ma_fabiasch-tx/trident-dialect-copa/data/bpm/train_val_test.pkl", "rb"
     ) as file:
