@@ -4,10 +4,14 @@ defaults:
   - default
   - /dataspec@datamodule.train.trace: bpm_trace_seq
   - /dataspec@datamodule.train.activity: bpm_activity_clf
-  - /dataspec@datamodule.val.trace: bpm_trace_seq
-  - /dataspec@datamodule.val.activity: bpm_activity_clf
-  - /dataspec@datamodule.test.trace: bpm_trace_seq
-  - /dataspec@datamodule.test.activity: bpm_activity_clf
+  - /dataspec@datamodule.val.val_trace: bpm_trace_seq
+  - /dataspec@datamodule.val.val_activity: bpm_activity_clf
+  - /dataspec@datamodule.val.test_trace: bpm_trace_seq
+  - /dataspec@datamodule.val.test_activity: bpm_activity_clf
+  - /dataspec@datamodule.test.val_trace: bpm_trace_seq
+  - /dataspec@datamodule.test.val_activity: bpm_activity_clf
+  - /dataspec@datamodule.test.test_trace: bpm_trace_seq
+  - /dataspec@datamodule.test.test_activity: bpm_activity_clf
   - override /callbacks: null
 
 run:
@@ -43,23 +47,43 @@ datamodule:
         shuffle: true
         batch_size: ${run.train_batch_size}
   val:
-    trace:
+    val_trace:
       dataset:
         split: val
       dataloader:
         batch_size: ${run.val_test_batch_size}
-    activity:
+    val_activity:
       dataset:
         split: val
       dataloader:
         batch_size: ${run.val_test_batch_size}
-  test:
-    trace:
+    test_trace:
       dataset:
         split: test
       dataloader:
         batch_size: ${run.val_test_batch_size}
-    activity:
+    test_activity:
+      dataset:
+        split: test
+      dataloader:
+        batch_size: ${run.val_test_batch_size}
+  test:
+    val_trace:
+      dataset:
+        split: val
+      dataloader:
+        batch_size: ${run.val_test_batch_size}
+    val_activity:
+      dataset:
+        split: val
+      dataloader:
+        batch_size: ${run.val_test_batch_size}
+    test_trace:
+      dataset:
+        split: test
+      dataloader:
+        batch_size: ${run.val_test_batch_size}
+    test_activity:
       dataset:
         split: test
       dataloader:

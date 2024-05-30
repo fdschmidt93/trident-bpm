@@ -21,6 +21,8 @@ def load_pkl(path):
 
 def remove_duplicates(pair_df):
     columns = ["revision_id", "model_id", "unique_activities"]
+    if "trace" in pair_df.columns:
+        columns.append("trace")
     if "eventually_follows" in pair_df.columns:
         columns.append("eventually_follows")
     if "prefix" in pair_df.columns:
@@ -143,6 +145,7 @@ def load_split(split: str = "train") -> Dataset:
         "/work/ws/ma_fabiasch-tx/trident-dialect-copa/data/bpm/eval_train_data_traces_balanced.pkl"
     )
     eval_train["labels"] = ~(eval_train.apply(lambda x: len(x["label"]) > 0, axis=1))
+    eval_train.trace = eval_train.trace.apply(lambda x: tuple(x))
     eval_train = remove_duplicates(eval_train)
     eval_train.trace = eval_train.trace.apply(lambda x: tuple(x))
     eval_train.unique_activities = eval_train.unique_activities.apply(setify)

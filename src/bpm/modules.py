@@ -15,10 +15,15 @@ from hydra.utils import instantiate
 def get_labelled_tokens(tokenizer, label_tokens: list[str]) -> list[int]:
     """Returns the indices of label tokens in tokenizer vocabulary."""
     out = []
+    name_or_path = tokenizer.name_or_path
     for token in label_tokens:
-        input_ids = tokenizer(token, add_special_tokens=False)["input_ids"]
-        assert len(input_ids) == 1, f"{token} is of length {len(input_ids)}"
-        out.append(input_ids[0])
+        # mistral has an empty string token before 0
+        if name_or_path.startswith("mistralai/Mistral-7B") and token == "0":
+            out.append(28734)
+        else:
+            input_ids = tokenizer(token, add_special_tokens=False)["input_ids"]
+            assert len(input_ids) == 1, f"{token} is of length {len(input_ids)}"
+            out.append(input_ids[0])
     return out
 
 
@@ -110,11 +115,15 @@ class LLMForSequenceClassification(TridentModule):
 
     def on_validation_batch_start(self, batch, batch_idx, dataloader_idx=0):
         if self.clf_heads is not None:
-            self._clf_head = self.clf_heads[dataloader_idx]
+            # 0 and 2 are trace dataloaders
+            # 1 and 3 are activity dataloaders
+            self._clf_head = self.clf_heads[dataloader_idx % 2]
 
     def on_test_batch_start(self, batch, batch_idx, dataloader_idx=0):
         if self.clf_heads is not None:
-            self._clf_head = self.clf_heads[dataloader_idx]
+            # 0 and 2 are trace dataloaders
+            # 1 and 3 are activity dataloaders
+            self._clf_head = self.clf_heads[dataloader_idx % 2]
 
 
 class RobertaForMultipleSequenceClassification(TridentModule):
@@ -187,10 +196,12 @@ class RobertaForMultipleSequenceClassification(TridentModule):
             return {"loss": loss}
 
     def on_validation_batch_start(self, batch, batch_idx, dataloader_idx=0):
-        self._clf_head = self.clf_heads[dataloader_idx]
+        # self._clf_head = self.clf_heads[dataloader_idx]
+        self._clf_head = self.clf_heads[dataloader_idx % 2]
 
     def on_test_batch_start(self, batch, batch_idx, dataloader_idx=0):
-        self._clf_head = self.clf_heads[dataloader_idx]
+        # self._clf_head = self.clf_heads[dataloader_idx]
+        self._clf_head = self.clf_heads[dataloader_idx % 2]
 
 
 #

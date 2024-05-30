@@ -3,8 +3,10 @@
 defaults:
   - default
   - /dataspec@datamodule.train.pair: bpm_pair
-  - /dataspec@datamodule.val.pair: bpm_pair
-  - /dataspec@datamodule.test.pair: bpm_pair
+  - /dataspec@datamodule.val.val_pair: bpm_pair
+  - /dataspec@datamodule.val.test_pair: bpm_pair
+  - /dataspec@datamodule.test.val_pair: bpm_pair
+  - /dataspec@datamodule.test.test_pair: bpm_pair
   - override /callbacks: null
 
 run:
@@ -14,6 +16,7 @@ run:
   train_batch_size: 2
   val_test_batch_size: 16
   val_check_interval: 0.33
+  # pretrained_model_name_or_path: "mistralai/Mistral-7B-Instruct-v0.2"
   pretrained_model_name_or_path: "meta-llama/Meta-Llama-3-8B-Instruct"
   # pretrained_model_name_or_path: "openai-community/gpt2"
   tokenizer: 
@@ -38,13 +41,23 @@ datamodule:
         shuffle: true
         batch_size: ${run.train_batch_size}
   val:
-    pair:
+    val_pair:
       dataset:
         split: val
       dataloader:
         batch_size: ${run.val_test_batch_size}
+    test_pair:
+      dataset:
+        split: test
+      dataloader:
+        batch_size: ${run.val_test_batch_size}
   test:
-    pair:
+    val_pair:
+      dataset:
+        split: val
+      dataloader:
+        batch_size: ${run.val_test_batch_size}
+    test_pair:
       dataset:
         split: test
       dataloader:

@@ -71,3 +71,14 @@ evaluation:
       kwargs: 
         preds: "outputs.preds"
         target: "outputs.labels"
+    logging:
+      metric:
+        _partial_: true
+        _target_: src.bpm.evaluation.store_predictions
+        dir_: ${hydra:runtime.output_dir}
+      compute_on: "epoch_end"
+      kwargs: 
+        trident_module: "trident_module"
+        preds: "outputs.preds"
+        labels: "outputs.labels"
+        dataset_name: "dataset_name"

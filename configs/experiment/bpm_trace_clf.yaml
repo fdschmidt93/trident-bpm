@@ -3,8 +3,10 @@
 defaults:
   - default
   - /dataspec@datamodule.train.trace: bpm_trace
-  - /dataspec@datamodule.val.trace: bpm_trace
-  - /dataspec@datamodule.test.trace: bpm_trace
+  - /dataspec@datamodule.val.val_trace: bpm_trace
+  - /dataspec@datamodule.val.test_trace: bpm_trace
+  - /dataspec@datamodule.test.val_trace: bpm_trace
+  - /dataspec@datamodule.test.test_trace: bpm_trace
   - override /callbacks: null
 
 run:
@@ -14,6 +16,7 @@ run:
   train_batch_size: 2
   val_test_batch_size: 16
   pretrained_model_name_or_path: "meta-llama/Meta-Llama-3-8B-Instruct"
+  # pretrained_model_name_or_path: "mistralai/Mistral-7B-Instruct-v0.2"
   # pretrained_model_name_or_path: "openai-community/gpt2"
   tokenizer: 
     _target_: transformers.AutoTokenizer.from_pretrained
@@ -37,13 +40,23 @@ datamodule:
         shuffle: true
         batch_size: ${run.train_batch_size}
   val:
-    trace:
+    val_trace:
       dataset:
         split: val
       dataloader:
         batch_size: ${run.val_test_batch_size}
+    test_trace:
+      dataset:
+        split: test
+      dataloader:
+        batch_size: ${run.val_test_batch_size}
   test:
-    trace:
+    val_trace:
+      dataset:
+        split: val
+      dataloader:
+        batch_size: ${run.val_test_batch_size}
+    test_trace:
       dataset:
         split: test
       dataloader:
