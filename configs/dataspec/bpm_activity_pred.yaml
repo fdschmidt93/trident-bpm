@@ -1,0 +1,55 @@
+dataset:
+  _target_: src.bpm.processing.load_next_activity_pred
+  split: ???
+  data_dir: ${hydra:runtime.cwd}/data/bpm/
+
+preprocessing:
+  method:
+    map:
+      batched: true
+      function:
+        _partial_: true
+        _target_: src.bpm.processing.preprocess_next_activity_pred
+        tokenizer: ${run.tokenizer}
+
+dataloader:
+  _target_: torch.utils.data.dataloader.DataLoader
+  batch_size: 32
+  num_workers: 0
+  pin_memory: true
+  shuffle: false
+  collate_fn:
+    _target_: src.bpm.processing.collate_next_activity_pred
+    _partial_: true
+    tokenizer: ${run.tokenizer}
+
+
+evaluation:
+  prepare:
+    batch:
+      _partial_: true
+      _target_: src.bpm.processing.on_batch
+      tokenizer: ${run.tokenizer}
+    outputs:
+      _partial_: true
+      _target_: src.bpm.processing.on_outputs
+    step_outputs: null 
+
+  step_outputs:
+    outputs: 
+      - label_strings
+      - preds
+
+  metrics:
+    preds:
+      metric:
+        _partial_: true
+        _target_: src.bpm.processing.on_epoch_end
+        # TODO: each epoch
+        output_path: "${hydra:runtime.output_dir}/"
+      compute_on: "epoch_end"
+      kwargs: 
+        preds: "outputs.preds"
+        label_strings: "outputs.label_strings"
+        trident_module: "trident_module"
+        dataset_name: "dataset_name"

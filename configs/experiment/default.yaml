@@ -10,7 +10,6 @@ run:
 trainer:
   max_epochs: 10
   devices: 1
-  deterministic: true
   inference_mode: false
 
 _log_vars:

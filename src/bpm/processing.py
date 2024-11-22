@@ -10,6 +10,7 @@ from sklearn.model_selection import train_test_split
 import string
 
 import pickle
+from trident.core.module import TridentModule
 
 # tokenizer = AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3-8B-Instruct")
 
@@ -45,7 +46,7 @@ def deduplicate_traces(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def split_by_model(
-    df, split_sizes: list[float] = [0.2, 0.1], random_state=4
+    df, split_sizes: list[float] = [0.2, 0.1], random_state=4, data_dir: str = "."
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     df["id"] = df["model_id"].astype(str) + "_" + df["revision_id"].astype(str)
     # model_ids = df["id"].unique()
@@ -57,9 +58,7 @@ def split_by_model(
     # )
     df["num_unique_activities"] = df["unique_activities"].apply(len)
     df = df[df["num_unique_activities"] > 1]
-    with open(
-        "/work/ws/ma_fabiasch-tx/trident-dialect-copa/data/bpm/train_val_test.pkl", "rb"
-    ) as file:
+    with open(f"{data_dir}/train_val_test.pkl", "rb") as file:
         train_ids, val_ids, test_ids = pickle.load(file)
     train_df = df[df["id"].isin(train_ids)]
     val_df = df[df["id"].isin(val_ids)]
@@ -69,7 +68,7 @@ def split_by_model(
 
 def load_pairs(split: str = "train") -> Dataset:
     eval_pairs = load_pkl(
-        "/work/ws/ma_fabiasch-tx/trident-dialect-copa/data/bpm/eval_train_data_pairs_balanced.pkl"
+        "/network/scratch/s/schmidtf/trident-bpm/data/bpm/eval_train_data_pairs_balanced.pkl"
     )
     eval_pairs["labels"] = ~(eval_pairs.out_of_order)
     eval_pairs = remove_duplicates(eval_pairs)
@@ -292,6 +291,333 @@ def preprocess_next_activity_clf(
     batch = tokenizer(inputs, truncation=True)
     batch["labels"] = torch.LongTensor([int(label) for label in examples["labels"]])
     return batch
+
+
+def preprocess_next_activity_pred(
+    examples: dict,
+    tokenizer: PreTrainedTokenizerFast,
+    prompt: str = "Given a list of activities that constitute an organizational process, determine all pairs of activities that can reasonably follow each other directly in an execution of this process.",
+    train: bool = True,
+) -> BatchEncoding:
+    # unique_activities: list[set[str]]
+    # prefix: list[tuple[str]]
+    # labels: list[string]
+
+    # List of activities:
+    # A. Activity
+    # B. Activity
+    # C. Activity
+    # Which one of the above activities should follow the below sequence of activities?
+    # Sequence of activites: []
+    # Answer: A
+    # trace: list[tuple[str]]
+    # label: list[bool]
+    # unique_activities: list[set[str]]
+    inputs = []
+    unlabelled = []
+    label_strings = []
+    for unique_activities_, dfg in zip(examples["unique_activities"], examples["dfg"]):
+        string_ = prompt + "\n"
+        # huggingface datasets converts set[str] to list[str]
+        assert isinstance(unique_activities_, list)
+        for i, activity in enumerate(unique_activities_, 1):
+            string_ += f"{i}. {activity.capitalize()}\n"
+        string_ += "Pairs of activities:\n"
+        unlabelled.append(string_)
+        # we only want to train on
+        label_string = ""
+        for lhs, rhs in dfg:
+            label_string += f"{lhs.capitalize()} -> {rhs.capitalize()}\n"
+        label_string = label_string.rstrip()
+        if train:
+            label_string += tokenizer.eos_token
+            string_ += label_string
+        else:
+            label_strings.append(label_string)
+        inputs.append(string_)
+    batch = tokenizer(inputs)
+    unlabelled_batch = tokenizer(unlabelled, add_special_tokens=False)
+    labels = []
+
+    if train:
+        # input_ids:        a b c d
+        # copied labels:    a b c d
+        # shifted input:    a b c
+        # shifted labels:   b c d
+        for input_ids, unlabelled_ in zip(
+            batch["input_ids"], unlabelled_batch["input_ids"]
+        ):
+            if input_ids[0] == unlabelled_[0]:
+                start_ = 0
+                offset = 1
+            elif input_ids[1] == unlabelled_[0]:
+                start_ = 1
+                offset = 0
+            else:
+                raise ValueError("offsets incorrect")
+            end_ = len(unlabelled_) + start_ + offset
+            labels_ = [i for i in input_ids]
+            # -1 since for final token of prompt, we want to predict next one
+            for i in range(start_, end_):
+                labels_[i] = -100
+            # labels[start_: end_ - 1] = -100
+            if labels_[0] == tokenizer.bos_token_id:
+                labels_[0] = -100
+            labels.append(labels_)
+        batch["labels"] = labels
+    else:
+        batch["label_strings"] = label_strings
+    return batch
+
+
+# Given a list of activities that constitute an organizational process, determine all pairs of activities that can reasonably follow each other directly in an execution of this process.
+# Provide only a list of pairs and use only activities from the given list followed by [END]
+tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-1B-Instruct")
+
+
+def tokenizer_with_padding(
+    pretrained_model_name_or_path: str, tokenizer_kwargs: dict = {}
+) -> PreTrainedTokenizerFast:
+    from transformers import AutoTokenizer
+
+    tokenizer = AutoTokenizer.from_pretrained(
+        pretrained_model_name_or_path, **tokenizer_kwargs
+    )
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token_id = tokenizer.eos_token_id
+    return tokenizer
+
+
+def load_next_activity_pred(data_dir: str, split: str):
+    df = pd.read_csv(data_dir + "S-PMD.csv")
+    train, val, test = split_by_model(df, data_dir=data_dir)
+    if split == "train":
+        df = train
+    elif split == "val":
+        df = val
+    if split == "test":
+        df = test
+    columns = ["id", "unique_activities", "dfg"]
+    df = df.loc[:, columns]
+    df["unique_activities"] = df["unique_activities"].apply(lambda ele: setify(ele))
+    df["dfg"] = df["dfg"].apply(lambda ele: eval(ele))
+    return Dataset.from_pandas(df)
+
+
+def load_pt_pred(data_dir: str, split: str):
+    df = pd.read_csv(data_dir + "S-PMD.csv")
+    train, val, test = split_by_model(df, data_dir=data_dir)
+    if split == "train":
+        df = train
+    elif split == "val":
+        df = val[:16]
+    if split == "test":
+        df = test[:16]
+    columns = ["id", "unique_activities", "pt"]
+    df = df.loc[:, columns]
+    df["unique_activities"] = df["unique_activities"].apply(lambda ele: setify(ele))
+    # df["dfg"] = df["dfg"].apply(lambda ele: eval(ele))
+    return Dataset.from_pandas(df)
+
+
+def collate_next_activity_pred(
+    examples: list[dict], tokenizer: PreTrainedTokenizerFast
+):
+    input_ids = [{"input_ids": line["input_ids"]} for line in examples]
+    batch = tokenizer.pad(
+        input_ids, padding=True, return_tensors="pt", return_attention_mask=True
+    )
+    labels = torch.full_like(batch["input_ids"], fill_value=-100)
+    if "labels" in examples[0]:
+        for i, line in enumerate(examples):
+            line_labels = line["labels"]
+            L = len(line_labels)
+            labels[i, -L:] = torch.LongTensor(line_labels)
+        batch["labels"] = labels
+    if "label_strings" in examples[0]:
+        # so lightning accepts that as an input
+        batch["label_strings"] = tokenizer(
+            [line["label_strings"] for line in examples],
+            padding=True,
+            add_special_tokens=False,
+            return_attention_mask=False,
+            return_tensors="pt",
+        )["input_ids"]
+
+    return batch
+
+
+def preprocess_pt(
+    examples: dict,
+    tokenizer: PreTrainedTokenizerFast,
+    prompt: str = "Given a list of activities below that constitute an organizational process, determine the process tree of the process. A process tree is a hierarchical process model. The following operators are defined for process trees:\n -> ( A, B ) tells that process tree A should be executed before process tree B\nX ( A, B ) tells that there is an exclusive choice between executing process tree A and process tree B\n+ ( A, B ) tells that process tree A and process treee B are executed in true concurrency. The leafs of a process tree are either activities or silent steps (indicated by tau).\nAn example process tree follows:\n+ ( 'a', -> ( 'b', 'c', 'd' ) )\nIt defines that you should execute b before executing c and c before d. In true concurrency to this, you can execute a. Therefore, the possible traces that this tree allows for are a->b->c->d, b->a->c->d, b->c->a->d, b->c->d->a.\n Provide the process tree in the format of the example as the answer.\nUse only activities from the given list as leaf nodes and only the allowed operators (->, X, +) as inner nodes. Also make sure each activity is used exactly once in the tree and there and each subtree has exactly one root node, i.e., pay attention to set parentheses correctly.",
+    train: bool = True,
+) -> BatchEncoding:
+    # unique_activities: list[set[str]]
+    # prefix: list[tuple[str]]
+    # labels: list[string]
+
+    # List of activities:
+    # A. Activity
+    # B. Activity
+    # C. Activity
+    # Which one of the above activities should follow the below sequence of activities?
+    # Sequence of activites: []
+    # Answer: A
+    # trace: list[tuple[str]]
+    # label: list[bool]
+    # unique_activities: list[set[str]]
+    inputs = []
+    unlabelled = []
+    label_strings = []
+    for unique_activities_, pt in zip(examples["unique_activities"], examples["pt"]):
+        string_ = prompt + "\n"
+        # huggingface datasets converts set[str] to list[str]
+        assert isinstance(unique_activities_, list)
+        for i, activity in enumerate(unique_activities_, 1):
+            string_ += f"{i}. {activity.capitalize()}\n"
+        string_ += "Process Tree:\n"
+        unlabelled.append(string_)
+        # we only want to train on
+        if train:
+            string_ += pt
+            string_ = string_.rstrip()
+            string_ += tokenizer.eos_token
+        label_strings.append(pt.rstrip() + tokenizer.eos_token)
+        inputs.append(string_)
+    batch = tokenizer(inputs, truncation=True)
+    unlabelled_batch = tokenizer(unlabelled, truncation=True, add_special_tokens=False)
+    labels = []
+
+    # input_ids:        a b c d
+    # copied labels:    a b c d
+    # shifted input:    a b c
+    # shifted labels:   b c d
+    if train:
+        for input_ids, unlabelled_ in zip(
+            batch["input_ids"], unlabelled_batch["input_ids"]
+        ):
+            if input_ids[0] == unlabelled_[0]:
+                start_ = 0
+                offset = 1
+            elif input_ids[1] == unlabelled_[0]:
+                start_ = 1
+                offset = 0
+            else:
+                raise ValueError("offsets incorrect")
+            end_ = len(unlabelled_) + start_ + offset
+            labels_ = [i for i in input_ids]
+            # -1 since for final token of prompt, we want to predict next one
+            for i in range(start_, end_):
+                labels_[i] = -100
+            # labels[start_: end_ - 1] = -100
+            labels.append(labels_)
+        batch["labels"] = labels
+    else:
+        batch["label_strings"] = label_strings
+    return batch
+
+
+# # task 1
+# tokenizer = tokenizer_with_padding(
+#     "meta-llama/Llama-3.2-1B-Instruct", tokenizer_kwargs={"padding_side": "left"}
+# )
+# train = load_next_activity_pred(path_prefix= "/network/scratch/s/schmidtf/trident-bpm/", split = "train")
+# train = train.map(
+#     preprocess_next_activity_pred, batched=True, fn_kwargs={"tokenizer": tokenizer}
+# )
+# val = load_next_activity_pred(path_prefix= "/network/scratch/s/schmidtf/trident-bpm/", split = "val")
+# val = val.map(
+#         preprocess_next_activity_pred, batched=True, fn_kwargs={"tokenizer": tokenizer, "train": False}
+# )
+# examples = [train[i] for i in range(10)]
+# batch = collate_next_activity_pred(examples, tokenizer)
+# i = 1
+# print(tokenizer.decode(batch["input_ids"][i]))
+# print(tokenizer.decode(torch.where(batch["labels"][i] == -100, 0, batch["labels"][i])))
+
+# for l, dfg, l_d in zip(examples[
+
+# # task 2
+# columns = ["id", "unique_activities", "pt"]
+# task2 = train.loc[:, columns]
+#
+# tokenizer.pad_token_id = tokenizer.eos_token_id
+
+
+# after each epoch
+# loop over dataset
+# give prompt and activities and start generating
+
+
+class GenerationModule(TridentModule):
+    def training_step(self, batch, batch_idx):
+        outputs = self.model(**batch)
+        self.log("train/loss", outputs["loss"])
+        return outputs
+
+    def forward(self, batch: dict):
+        return self.model.generate(**batch, max_length=512)
+
+
+def on_batch(
+    batch: dict[str, str | torch.Tensor],
+    trident_module: TridentModule,
+    tokenizer: PreTrainedTokenizerFast,
+    *args,
+    **kwargs,
+):
+    # intermediately store label_strings in tridentmodule so they are not forwarded to model
+    trident_module._label_strings = tokenizer.batch_decode(
+        batch.pop("label_strings").cpu(), skip_special_tokens=True
+    )
+    return batch
+
+
+def on_outputs(
+    outputs: dict,
+    batch: dict[str, torch.Tensor],
+    trident_module: TridentModule,
+    *args,
+    **kwargs,
+):
+    out = {}
+    out["label_strings"] = trident_module._label_strings
+    predictions = tokenizer.batch_decode(outputs, skip_special_tokens=True)
+    # we need to remove prefix
+    # predictions: list[str]
+    stripped_predictions = []
+    for line in predictions:
+        # find "Process Tree\n" or "Pairs of activities\n" and remove strings up until then
+        prefix = (
+            "Process Tree:\n" if "Process Tree:\n" in line else "Pairs of activities:\n"
+        )
+        idx = line.find(prefix) + len(prefix)
+        stripped_predictions.append(line[idx:])
+    out["preds"] = stripped_predictions
+    import pudb
+    pu.db
+    return out
+
+
+def on_epoch_end(
+    label_strings: list[str],
+    preds: list[str],
+    dataset_name,
+    output_path: str,
+    trident_module,
+):
+    trainer = trident_module.trainer
+    epoch = trainer.current_epoch
+    # import csv
+    import pickle
+
+    # Write to CSV
+    with open(output_path + f"{dataset_name}_{epoch}.csv", "wb") as file:
+        out = {"labels": label_strings, "preds": preds}
+        pickle.dump(out, file)
+    # skip computing evaluation metric
+    return None
 
 
 # only keep unique pairs per model
