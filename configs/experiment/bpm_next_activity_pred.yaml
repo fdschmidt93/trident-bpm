@@ -10,7 +10,7 @@ defaults:
   - override /callbacks: null
 
 run:
-  task: activity
+  task: bpm_next_activity_pred
   lang: en
   seed: 42
   train_batch_size: 8
@@ -23,7 +23,6 @@ run:
     pretrained_model_name_or_path: ${run.pretrained_model_name_or_path}
     tokenizer_kwargs:
       padding_side: "left"
-
 
 trainer:
   max_epochs: 3

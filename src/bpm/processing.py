@@ -552,11 +552,20 @@ def preprocess_pt(
 
 class GenerationModule(TridentModule):
     def training_step(self, batch, batch_idx):
+    # Causal Language Modeling for required predictions only
+    # Imagine the prompt is the prefix that are "unlabelled tokens"
+    # what we want to generate (i.e., list of pairs of process tree) are the labelled tokens
         outputs = self.model(**batch)
         self.log("train/loss", outputs["loss"])
         return outputs
-
+    
+    # at inference, this becomes generation
+    # here, generation parameters might have to be fine-tuned
+    # check https://huggingface.co/docs/transformers/main_classes/text_generation for variables
+    # get input from chatgpt
     def forward(self, batch: dict):
+        # generation parameters would go in to this function like max_length=512
+        # this is essentially taken from above page
         return self.model.generate(**batch, max_length=512)
 
 
@@ -589,14 +598,13 @@ def on_outputs(
     stripped_predictions = []
     for line in predictions:
         # find "Process Tree\n" or "Pairs of activities\n" and remove strings up until then
+        # these tokens are defined in the corresponding preprocessing functions
         prefix = (
             "Process Tree:\n" if "Process Tree:\n" in line else "Pairs of activities:\n"
         )
         idx = line.find(prefix) + len(prefix)
         stripped_predictions.append(line[idx:])
     out["preds"] = stripped_predictions
-    import pudb
-    pu.db
     return out
 
 
@@ -613,7 +621,7 @@ def on_epoch_end(
     import pickle
 
     # Write to CSV
-    with open(output_path + f"{dataset_name}_{epoch}.csv", "wb") as file:
+    with open(output_path + f"{dataset_name}_{epoch}.pkl", "wb") as file:
         out = {"labels": label_strings, "preds": preds}
         pickle.dump(out, file)
     # skip computing evaluation metric

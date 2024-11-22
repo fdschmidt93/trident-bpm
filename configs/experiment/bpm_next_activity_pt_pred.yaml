@@ -10,7 +10,7 @@ defaults:
   - override /callbacks: null
 
 run:
-  task: activity
+  task: bpm_next_activity_pt_pred
   lang: en
   seed: 42
   train_batch_size: 8
