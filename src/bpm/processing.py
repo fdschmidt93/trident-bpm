@@ -372,7 +372,7 @@ def preprocess_next_activity_pred(
 
 # Given a list of activities that constitute an organizational process, determine all pairs of activities that can reasonably follow each other directly in an execution of this process.
 # Provide only a list of pairs and use only activities from the given list followed by [END]
-tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-1B-Instruct")
+# tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-1B-Instruct") TODO adjust to the LLM you use!!!!
 
 
 def tokenizer_with_padding(

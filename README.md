@@ -3,15 +3,19 @@
 
 # Fine-tuning LMs on semantics-aware process mining tasks
 - The sub-folder 'bpm' contains the necessary preprocessing and evaluation code.
-- The individual tasks can be run using bash scripts:
+- The individual tasks can be run using bash scripts, which submit a slurm job based on the parameters defined in configs/experiments:
     - 'pair.sh' for A-SAD using LLMs
     - 'trace.sh' for T-SAD using LLMs
     - 'activity.sh' for S-NAP using LLMs
+    - 'next_activity.sh' for S-DFD using LLMs
+    - 'pt.sh' for S-PTD using LLMs
     - 'trace_activity.sh' for multi-task T-SAD and S-NAP using LLMs
     - 'pair_roberta.sh' for A-SAD using RoBERTa
     - 'trace_roberta.sh' for T-SAD using RoBERTa
     - 'activity_roberta.sh' for S-NAP using RoBERTa
     - 'trace_activity_roberta.sh' for multi-task T-SAD and S-NAP using RoBERTa
+
+- You need to adapt the parameters for each of the tasks, for the generation tasks, (currently) also the correct tokenizer must be imported in the src/bpm/processing.py file (line 375) 
  
  # trident-xtreme
 
